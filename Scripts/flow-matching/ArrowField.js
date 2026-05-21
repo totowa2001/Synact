@@ -1,13 +1,14 @@
 // 최신화 260520
-// 최신화내용: 화살표(원통+원뿔) → 3D 픽셀 박스(BoxGeometry) 전면 교체, 브랜드 다중 컬러 팔레트
+// 최신화내용: 정사각 박스 → 얇고 긴 직육면체(0.25×1×0.08)로 교체, 보라색 팔레트 제거
 // 스크립트 이름: ArrowField.js
-// 스크립트 기능: 3D 픽셀 필드 — BoxGeometry(1×1×0.3) InstancedMesh.
-//               박스의 Z축이 흐름 방향에 정렬 → 정면(XY face)이 흐름을 향함.
+// 스크립트 기능: 3D 픽셀 필드 — 얇고 긴 BoxGeometry(0.25×1×0.08) InstancedMesh.
+//               Y축이 흐름 방향에 정렬 → 직육면체 긴 축이 흐름 방향을 향함.
 //               수렴 강도에 따라 크기·색상 변조.
-//               브랜드 컬러(navy~blue 계열) + 유사색 팔레트, 수렴 핫스팟은 lime.
+//               브랜드 컬러(navy~blue 계열) + 유사색 5색 팔레트, 수렴 핫스팟은 lime.
 //
 // [ 핵심 구조 ]
-//   _boxMesh    — BoxGeometry InstancedMesh (TOTAL개)
+//   _boxMesh    — BoxGeometry(0.25,1,0.08) InstancedMesh (TOTAL개)
+//                 긴 축(Y)이 흐름 방향 → 스트로크처럼 흐름을 따라 정렬
 //   _colorGroup — 픽셀별 고정 팔레트 인덱스 Uint8Array (init에서 1회 결정, 이후 불변)
 //   _gridPos    — 구형 산포 좌표 (Float32Array, TOTAL×3)
 //
@@ -20,24 +21,23 @@ var ArrowField = (function () {
   var _gridPos;      // Float32Array (TOTAL * 3)
   var _colorGroup;   // Uint8Array (TOTAL) — 픽셀별 고정 팔레트 인덱스
 
-  var _boxMesh;      // THREE.InstancedMesh — 3D 픽셀 박스
+  var _boxMesh;      // THREE.InstancedMesh — 얇고 긴 직육면체 픽셀
 
   // 매 프레임 재사용 오브젝트 (GC 방지)
   var _dummy = null;
-  var _zAxis = null;  // Z축 → 흐름 방향 정렬 기준
+  var _yAxis = null;  // Y축 기준 회전 (직육면체 긴 축 = 흐름 방향)
   var _dir   = null;
   var _color = null;
 
-  // 브랜드 컬러 + 유사색 확장 팔레트 — 밝은 배경(#F2F3F8)에서 식별 가능한 명도로 선정
-  // 인덱스 0~5: 파란 계열 메인 / 인덱스 6: lime(수렴 핫스팟 전용, 직접 할당 안 함)
+  // 브랜드 컬러 + 유사색 5색 팔레트 (보라색 제외)
+  // 인덱스 0~4: 파란 계열 메인 / 인덱스 5: lime (수렴 핫스팟 전용)
   var _PALETTE = [
-    [ 24/255,  24/255,  88/255],  // primary navy   #181858
-    [ 55/255,  83/255, 127/255],  // mid blue        #37537F
-    [ 30/255,  52/255, 148/255],  // bright navy     #1E3494 (유사색)
-    [ 25/255,  88/255, 170/255],  // light blue      #1958AA (유사색)
-    [ 62/255,  32/255, 115/255],  // blue-purple     #3E2073 (유사색)
-    [105/255, 168/255, 220/255],  // sky blue        #69A8DC (유사색)
-    [192/255, 255/255,   0/255],  // lime accent     #C0FF00 (수렴 핫스팟 보색 포인트)
+    [ 24/255,  24/255,  88/255],  // 0: primary navy  #181858
+    [ 55/255,  83/255, 127/255],  // 1: mid blue       #37537F
+    [ 30/255,  52/255, 148/255],  // 2: bright navy    #1E3494 (유사색)
+    [ 25/255,  88/255, 170/255],  // 3: light blue     #1958AA (유사색)
+    [105/255, 168/255, 220/255],  // 4: sky blue       #69A8DC (유사색)
+    [192/255, 255/255,   0/255],  // 5: lime accent    #C0FF00 (수렴 핫스팟 보색 포인트)
   ];
 
   // ----------------------------------------------------------------
@@ -54,8 +54,8 @@ var ArrowField = (function () {
 
   // 함수 이름: init
   // 함수 기능: 구형 산포 좌표 생성, 픽셀별 팔레트 그룹 결정, BoxGeometry InstancedMesh 초기화.
-  //           BoxGeometry(1, 1, 0.3): XY가 픽셀 정면, Z 두께 0.3 → 흐름 방향 정렬 시
-  //           정면(1×1)이 흐름을 향하고 얇은 측면이 측방으로 노출되어 방향감 부여.
+  //           BoxGeometry(0.25, 1, 0.08): 긴 축 Y=1, 폭 X=0.25, 두께 Z=0.08.
+  //           Y축 → 흐름 방향 정렬 시 직육면체 긴 면이 흐름을 따라 정렬 → 스트로크 효과.
   // 입력 파라미터: scene (THREE.Scene)
   // 리턴 타입: void
   function init(scene) {
@@ -73,11 +73,13 @@ var ArrowField = (function () {
       _gridPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
       _gridPos[i*3+1] = r * Math.cos(phi);
       _gridPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
-      // 픽셀별 고정 색상 (0~5: 파란 계열, 6은 수렴 핫스팟 전용이므로 제외)
-      _colorGroup[i] = Math.floor(_rnd(i * 17 + 3) * 6);
+      // 픽셀별 고정 색상 (0~4: 파란 계열, 5는 lime 핫스팟 전용이므로 제외)
+      _colorGroup[i] = Math.floor(_rnd(i * 17 + 3) * 5);
     }
 
-    var boxGeo = new THREE.BoxGeometry(1, 1, 0.3);
+    // 얇고 긴 직육면체: 폭(X)=0.25, 길이(Y)=1.0, 두께(Z)=0.08
+    // Y축을 흐름 방향으로 정렬하면 긴 축이 흐름을 따라 배치됨
+    var boxGeo = new THREE.BoxGeometry(0.25, 1, 0.08);
     var mat    = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
     _boxMesh = new THREE.InstancedMesh(boxGeo, mat, _TOTAL);
@@ -85,15 +87,15 @@ var ArrowField = (function () {
     _scene.add(_boxMesh);
 
     _dummy = new THREE.Object3D();
-    _zAxis = new THREE.Vector3(0, 0, 1);
+    _yAxis = new THREE.Vector3(0, 1, 0);
     _dir   = new THREE.Vector3();
     _color = new THREE.Color();
   }
 
   // 함수 이름: update
   // 함수 기능: 매 프레임 모든 픽셀의 방향·크기·색상 갱신.
-  //           박스 Z축 → 흐름 방향 / 수렴 점수 → 크기(0.2×~2.8×) + lime 핫스팟.
-  //           수렴 강도 0.5~0.85 구간에서 기본 색상 → lime으로 보간.
+  //           Y축 → 흐름 방향 / 수렴 점수 → 크기(0.2×~2.8×) + lime 핫스팟 보간.
+  //           수렴 강도 0.5~0.85 구간에서 기본 색상 → lime으로 선형 보간.
   // 입력 파라미터: t (Number) 경과 시간(초, animSpeed 적용됨) / dt (Number) 프레임 델타
   // 리턴 타입: void
   function update(t, dt) {
@@ -107,10 +109,10 @@ var ArrowField = (function () {
       var v    = FlowField.getVector(gx, gy, gz, t);
       var vlen = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
 
-      // 방향 정규화
+      // 방향 정규화 (영벡터 방지 — 기본값 Y축 방향)
       var dx, dy, dz;
       if (vlen < 0.0001) {
-        dx = 0; dy = 0; dz = 1; vlen = 0.0001;
+        dx = 0; dy = 1; dz = 0; vlen = 0.0001;
       } else {
         dx = v.x/vlen; dy = v.y/vlen; dz = v.z/vlen;
       }
@@ -121,24 +123,25 @@ var ArrowField = (function () {
       var strength = Math.min(1, vlen * 0.5);
       var sz = baseSize * (0.2 + strength * 0.3 + conv * (maxScale - 1.0));
 
-      // 변환 — 박스 Z축을 흐름 방향으로 정렬
+      // 변환 — 직육면체 Y축(긴 축)을 흐름 방향으로 정렬
       _dummy.position.set(gx, gy, gz);
-      _dummy.quaternion.setFromUnitVectors(_zAxis, _dir);
+      _dummy.quaternion.setFromUnitVectors(_yAxis, _dir);
       _dummy.scale.set(sz, sz, sz);
       _dummy.updateMatrix();
       _boxMesh.setMatrixAt(i, _dummy.matrix);
 
       // 색상 — 수렴 강도에 따라 기본 팔레트 색상 → lime으로 선형 보간
-      // tc=0: 기본 색, tc=1(conv≥0.85): lime 핫스팟
+      // tc=0(conv<0.5): 기본 색, tc=1(conv≥0.85): lime 핫스팟
       var base = _PALETTE[_colorGroup[i]];
-      var lime = _PALETTE[6];
+      var lime = _PALETTE[5];
       var tc = (conv - 0.50) / 0.35;
       if (tc < 0) tc = 0;
       if (tc > 1) tc = 1;
-      var cr = base[0] + (lime[0] - base[0]) * tc;
-      var cg = base[1] + (lime[1] - base[1]) * tc;
-      var cb = base[2] + (lime[2] - base[2]) * tc;
-      _color.setRGB(cr, cg, cb);
+      _color.setRGB(
+        base[0] + (lime[0] - base[0]) * tc,
+        base[1] + (lime[1] - base[1]) * tc,
+        base[2] + (lime[2] - base[2]) * tc
+      );
       _boxMesh.setColorAt(i, _color);
     }
 
