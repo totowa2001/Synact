@@ -1,5 +1,5 @@
 // 최신화 260520
-// 최신화내용: animSpeed 적용 — ArrowField에 t * PARAMS.animSpeed 전달
+// 최신화내용: StreamLines 레이어 추가 — init·update 통합
 // 스크립트 이름: main.js
 // 스크립트 기능: Three.js 씬 초기화, 조명 설정, ArrowField 통합, 애니메이션 루프
 // 입력 파라미터: tokens.js / FlowField.js / ArrowField.js (전역)
@@ -142,6 +142,7 @@
     }
 
     ArrowField.update(t * PARAMS.animSpeed, dt);
+    StreamLines.update(t * PARAMS.animSpeed, dt);
     _renderer.render(_scene, _camera);
   }
 
@@ -157,6 +158,7 @@
     _initScene();
     _initControls();
     ArrowField.init(_scene);
+    StreamLines.init(_scene);
     _animate();
   }
 

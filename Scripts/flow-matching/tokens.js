@@ -61,6 +61,12 @@ var PARAMS = {
   convergenceStr: 0.22,
   vortexStr    : 2.8,
 
+  // --- 스트림라인 ---
+  // streamStep을 크게 하면 선이 더 빨리 전진하고 꼬리가 더 멀리 펼쳐짐
+  streamCount  : 360,    // 스트림라인 수
+  streamLen    : 55,    // 궤적 길이 (점 수, 클수록 꼬리가 길어짐)
+  streamStep   : 0.22,  // 헤드 전진 거리 (world units/frame)
+
   // --- 씬 ---
   fogDensity   : 0.012,
 
