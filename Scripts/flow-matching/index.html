@@ -1,0 +1,62 @@
+<!--
+  ================================================================
+  Flow Matching — Inference Storm / Synact 그래픽 비주얼라이제이션
+  ================================================================
+
+  [ 실행 방법 ]
+  이 파일(index.html)을 Chrome 또는 Edge 브라우저로 열면 됩니다.
+  설치 필요 없음. 단, 최초 실행 시 인터넷 연결 필요 (Three.js CDN).
+  이후에는 브라우저 캐시로 오프라인 실행 가능.
+
+  [ 조작 방법 ]
+  - 마우스 드래그  : 카메라 회전
+  - 마우스 휠      : 줌 인/아웃
+  - 드래그 없을 때 : 자동으로 천천히 공전
+
+  [ 파라미터 조정 — tokens.js ]
+  BG_R / BG_G / BG_B      : 배경 RGB (기본 242, 243, 248 = #F2F3F8)
+  PARAMS.gridN             : 격자 해상도 (기본 16 → 16^3=4096 화살표)
+  PARAMS.arrowBaseLen      : 화살표 기본 길이
+  PARAMS.vortexStr         : 소용돌이 강도 (높을수록 회전 흐름 강함)
+  PARAMS.noiseSpeed        : 시간에 따른 흐름 변화 속도
+
+  [ 외부 의존성 — CDN 자동 로드, 추가 설치 불필요 ]
+  - Three.js r128 : https://cdnjs.cloudflare.com
+  - Google Fonts  : https://fonts.googleapis.com (info 텍스트용)
+  ================================================================
+-->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flow Matching — Inference Storm</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; width: 100vw; height: 100vh; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #info {
+      position: fixed;
+      bottom: 18px;
+      left: 22px;
+      font-family: 'Sora', monospace;
+      font-size: 10px;
+      color: rgba(24, 24, 88, 0.30);
+      pointer-events: none;
+      letter-spacing: 0.09em;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">SYNACT · FLOW MATCHING · INFERENCE STORM</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- 로드 순서 중요: tokens → FlowField → ArrowField → main -->
+  <script src="tokens.js"></script>
+  <script src="FlowField.js"></script>
+  <script src="ArrowField.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
