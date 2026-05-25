@@ -1,14 +1,15 @@
-// 최신화 260520
-// 최신화내용: StreamLines 레이어 추가 — init·update 통합
+// 최신화 260525
+// 최신화내용: globalT 사이클 관리 추가 — ClusterMeshes·BBoxLayer 통합
 // 스크립트 이름: main.js
-// 스크립트 기능: Three.js 씬 초기화, 조명 설정, ArrowField 통합, 애니메이션 루프
-// 입력 파라미터: tokens.js / FlowField.js / ArrowField.js (전역)
+// 스크립트 기능: Three.js 씬 초기화, 조명 설정, globalT 기반 애니메이션 루프
+// 입력 파라미터: tokens.js / ArrowField.js / StreamLines.js / ClusterMeshes.js / BBoxLayer.js (전역)
 
 (function () {
 
   var _renderer, _scene, _camera, _clock, _halfH;
   var _theta = 0.5, _phi = Math.PI * 0.20, _radius;
   var _isDragging = false, _prevMX = 0, _prevMY = 0;
+  var _globalT = 0, _cycleT = 0, _resetT = 0, _inReset = false;
 
   // ================================================================
   // 씬 초기화
@@ -137,14 +138,13 @@
   // ================================================================
 
   // 함수 이름: _animate
-  // 함수 기능: requestAnimationFrame 루프 — ArrowField 업데이트 → 렌더
+  // 함수 기능: requestAnimationFrame 루프 — globalT 사이클 관리 → 전체 모듈 업데이트 → 렌더
   // 입력 파라미터: 없음
   // 리턴 타입: void
   function _animate() {
     requestAnimationFrame(_animate);
 
     var dt = _clock.getDelta();
-    var t  = _clock.getElapsedTime();
     if (dt > 0.1) dt = 0.1;  // 백그라운드 복귀 시 dt 폭발 방지
 
     // 드래그 중이 아닐 때 자동 공전
@@ -153,8 +153,21 @@
       _updateCamera();
     }
 
-    ArrowField.update(t * PARAMS.animSpeed, dt);
-    StreamLines.update(t * PARAMS.animSpeed, dt);
+    // globalT 사이클 관리 — Phase A/B/C (0→1, cycleDuration초), Phase D (1→0, resetDuration초 빠른 분산)
+    if (!_inReset) {
+      _cycleT += dt / PARAMS.cycleDuration;
+      if (_cycleT >= 1.0) { _cycleT = 1.0; _inReset = true; _resetT = 0; }
+      _globalT = _cycleT;
+    } else {
+      _resetT += dt / PARAMS.resetDuration;
+      if (_resetT >= 1.0) { _resetT = 0; _inReset = false; _cycleT = 0; }
+      _globalT = 1.0 - _resetT;
+    }
+
+    ArrowField.update(_globalT);
+    StreamLines.update(_globalT);
+    ClusterMeshes.update(_globalT);
+    BBoxLayer.update(_globalT);
     _renderer.render(_scene, _camera);
   }
 
@@ -171,6 +184,8 @@
     _initControls();
     ArrowField.init(_scene);
     StreamLines.init(_scene);
+    ClusterMeshes.init(_scene);
+    BBoxLayer.init(_scene);
     _animate();
   }
 
