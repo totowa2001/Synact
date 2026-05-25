@@ -68,9 +68,10 @@ var PARAMS = {
   streamStep   : 0.22,  // 헤드 전진 거리 (world units/frame)
 
   // --- 씬 ---
-  fogDensity   : 0.012,
+  fogDensity   : 0.003,  // 외부 시점용 저밀도 (카메라 구 외부에서 바라봄)
 
-  // --- 카메라 ---
-  camRadius    : 22,
+  // --- 카메라 (OrthographicCamera, 구 외부 시점) ---
+  camRadius    : 80,     // 카메라~원점 거리 (gridHalf=28보다 충분히 크게)
+  camHalfH     : 35,     // 직교 카메라 반폭(Y) — 마우스 휠로 줌 조정
   camAutoRot   : 0.00012,
 };

@@ -1,5 +1,5 @@
-// 최신화 260520
-// 최신화내용: 정사각 박스 → 얇고 긴 직육면체(0.25×1×0.08)로 교체, 보라색 팔레트 제거
+// 최신화 260525
+// 최신화내용: 직육면체 → 3D 화살표(샤프트+콘 헤드, BufferGeometryUtils 병합)
 // 스크립트 이름: ArrowField.js
 // 스크립트 기능: 3D 픽셀 필드 — 얇고 긴 BoxGeometry(0.25×1×0.08) InstancedMesh.
 //               Y축이 흐름 방향에 정렬 → 직육면체 긴 축이 흐름 방향을 향함.
@@ -77,9 +77,13 @@ var ArrowField = (function () {
       _colorGroup[i] = Math.floor(_rnd(i * 17 + 3) * 5);
     }
 
-    // 얇고 긴 직육면체: 폭(X)=0.25, 길이(Y)=1.0, 두께(Z)=0.08
-    // Y축을 흐름 방향으로 정렬하면 긴 축이 흐름을 따라 배치됨
-    var boxGeo = new THREE.BoxGeometry(0.25, 1, 0.08);
+    // 3D 화살표 — 원기둥 샤프트(Y=-0.35~+0.35) + 원뿔 헤드(Y=+0.35~+0.65, tip=+Y)
+    // tip이 +Y → setFromUnitVectors(_yAxis, _dir)로 흐름 방향 정렬
+    var shaftGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.70, 6);
+    var headGeo  = new THREE.ConeGeometry(0.14, 0.30, 6);
+    headGeo.translate(0, 0.50, 0);  // ConeGeometry 기본 중심 Y=0 → tip=+0.65, base=+0.35
+    var boxGeo = THREE.BufferGeometryUtils.mergeBufferGeometries([shaftGeo, headGeo]);
+    boxGeo.computeVertexNormals();
     var mat    = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
     _boxMesh = new THREE.InstancedMesh(boxGeo, mat, _TOTAL);

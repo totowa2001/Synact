@@ -6,8 +6,8 @@
 
 (function () {
 
-  var _renderer, _scene, _camera, _clock;
-  var _theta = 0.5, _phi = Math.PI * 0.32, _radius;
+  var _renderer, _scene, _camera, _clock, _halfH;
+  var _theta = 0.5, _phi = Math.PI * 0.20, _radius;
   var _isDragging = false, _prevMX = 0, _prevMY = 0;
 
   // ================================================================
@@ -34,9 +34,11 @@
     // 원근 안개 — 멀리 있는 화살표를 배경색으로 자연스럽게 페이드
     _scene.fog = new THREE.FogExp2(COLORS.bgColor(), PARAMS.fogDensity);
 
-    // 카메라
-    _camera = new THREE.PerspectiveCamera(
-      56, window.innerWidth / window.innerHeight, 0.1, 400
+    // 카메라 — OrthographicCamera: 구 외부에서 바라보는 평면적 시점
+    _halfH = PARAMS.camHalfH;
+    var _aspect = window.innerWidth / window.innerHeight;
+    _camera = new THREE.OrthographicCamera(
+      -_halfH * _aspect, _halfH * _aspect, _halfH, -_halfH, 0.1, 500
     );
     _updateCamera();
 
@@ -60,7 +62,11 @@
 
     // 리사이즈
     window.addEventListener('resize', function () {
-      _camera.aspect = window.innerWidth / window.innerHeight;
+      var aspect = window.innerWidth / window.innerHeight;
+      _camera.left   = -_halfH * aspect;
+      _camera.right  =  _halfH * aspect;
+      _camera.top    =  _halfH;
+      _camera.bottom = -_halfH;
       _camera.updateProjectionMatrix();
       _renderer.setSize(window.innerWidth, window.innerHeight);
     });
@@ -77,6 +83,12 @@
       _radius * Math.sin(_phi) * Math.cos(_theta)
     );
     _camera.lookAt(0, 0, 0);
+    var aspect = window.innerWidth / window.innerHeight;
+    _camera.left   = -_halfH * aspect;
+    _camera.right  =  _halfH * aspect;
+    _camera.top    =  _halfH;
+    _camera.bottom = -_halfH;
+    _camera.updateProjectionMatrix();
   }
 
   // ================================================================
@@ -102,7 +114,7 @@
       _updateCamera();
     });
     el.addEventListener('wheel', function (e) {
-      _radius = Math.max(15, Math.min(120, _radius + e.deltaY * 0.04));
+      _halfH = Math.max(10, Math.min(80, _halfH + e.deltaY * 0.05));
       _updateCamera();
     }, { passive: true });
 

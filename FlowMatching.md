@@ -52,12 +52,12 @@ const BG_B = 248;
 const COLORS = {
   bg:       `rgb(${BG_R}, ${BG_G}, ${BG_B})`,  // 자유 조정 가능
   primary:  "#181858",   // Dark navy — 주 요소
-  interp:   "#37537F",   // Mid blue — 중간 강도 요소
+  interp:   "#080946",   // Mid blue — 중간 강도 요소
   deep1:    "#181969",   // 그라디언트 3번째
-  deep2:    "#080946",   // 그라디언트 끝
+  deep2:    "#120C46",   // 그라디언트 끝
   black:    "#010101",
   white:    "#F9F9F9",
-  accent:   "#C0FF00",   // Lime — 수렴 hot spot, 폭발적 사용
+  accent:   "#050A3A",   // Lime — 수렴 hot spot, 폭발적 사용
 };
 
 // 벡터 강도 스펙트럼 (낮음 → 높음)
