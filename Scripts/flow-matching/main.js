@@ -1,14 +1,12 @@
 // 최신화 260525
-// 최신화내용: globalT 사이클 관리 추가 — ClusterMeshes·BBoxLayer 통합
+// 최신화내용: PerspectiveCamera 전환 (2.5D), 방향광 3점 조명, 휠=카메라 Z 이동
 // 스크립트 이름: main.js
-// 스크립트 기능: Three.js 씬 초기화, 조명 설정, globalT 기반 애니메이션 루프
+// 스크립트 기능: Three.js 씬 초기화, PerspectiveCamera 2.5D 시점, globalT 3단계 사이클 애니메이션
 // 입력 파라미터: tokens.js / ArrowField.js / StreamLines.js / ClusterMeshes.js / BBoxLayer.js (전역)
 
 (function () {
 
-  var _renderer, _scene, _camera, _clock, _halfH;
-  var _theta = 0.5, _phi = Math.PI * 0.20, _radius;
-  var _isDragging = false, _prevMX = 0, _prevMY = 0;
+  var _renderer, _scene, _camera, _clock;
   var _globalT = 0, _cycleT = 0, _resetT = 0, _inReset = false;
 
   // ================================================================
@@ -16,12 +14,11 @@
   // ================================================================
 
   // 함수 이름: _initScene
-  // 함수 기능: 렌더러·씬·카메라·안개·조명 초기화
+  // 함수 기능: 렌더러·씬·PerspectiveCamera(2.5D)·3점 조명 초기화
+  //           PerspectiveCamera + BoxGeometry + Lambert → 2.5D 입체감 (측면 음영)
   // 입력 파라미터: 없음
   // 리턴 타입: void
   function _initScene() {
-    _radius = PARAMS.camRadius;
-
     // 렌더러
     _renderer = new THREE.WebGLRenderer({ antialias: true });
     _renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -32,105 +29,50 @@
     _scene = new THREE.Scene();
     _scene.background = COLORS.bgColor();
 
-    // 원근 안개 — 멀리 있는 화살표를 배경색으로 자연스럽게 페이드
-    _scene.fog = new THREE.FogExp2(COLORS.bgColor(), PARAMS.fogDensity);
-
-    // 카메라 — OrthographicCamera: 구 외부에서 바라보는 평면적 시점
-    _halfH = PARAMS.camHalfH;
-    var _aspect = window.innerWidth / window.innerHeight;
-    _camera = new THREE.OrthographicCamera(
-      -_halfH * _aspect, _halfH * _aspect, _halfH, -_halfH, 0.1, 500
-    );
-    _updateCamera();
+    // PerspectiveCamera — 상단에서 수직으로 내려다보는 2.5D 시점
+    var aspect = window.innerWidth / window.innerHeight;
+    _camera = new THREE.PerspectiveCamera(PARAMS.camFOV, aspect, 0.1, 300);
+    _camera.position.set(0, 0, PARAMS.camZ);
+    _camera.lookAt(0, 0, 0);
 
     // 클록
     _clock = new THREE.Clock();
 
-    // --- 조명 ---
-    // 앰비언트: 전체 균일 조명 (그림자 영역도 완전히 검지 않게)
+    // 3점 조명 — BoxGeometry 측면에 음영을 만들어 2.5D 입체감 부여
+    // 앰비언트: 그림자 영역도 완전히 검지 않게
     var ambient = new THREE.AmbientLight(0xffffff, 0.42);
     _scene.add(ambient);
 
-    // 주 방향광: 우상단에서 비추어 실린더 입체감 생성
+    // 주 방향광: 우상단에서 비추어 상면·측면 명암 생성
     var dirMain = new THREE.DirectionalLight(0xffffff, 1.25);
-    dirMain.position.set(3, 5, 2);
+    dirMain.position.set(3, 5, 4);
     _scene.add(dirMain);
 
-    // 보조 방향광: 좌하단에서 파란 계열 필 라이트 (레퍼런스의 청회색 분위기)
+    // 보조 방향광: 좌하단에서 파란 계열 필 라이트 (청회색 분위기)
     var dirFill = new THREE.DirectionalLight(0x9BB5D0, 0.38);
-    dirFill.position.set(-3, -2, -4);
+    dirFill.position.set(-3, -2, -2);
     _scene.add(dirFill);
 
     // 리사이즈
     window.addEventListener('resize', function () {
-      var aspect = window.innerWidth / window.innerHeight;
-      _camera.left   = -_halfH * aspect;
-      _camera.right  =  _halfH * aspect;
-      _camera.top    =  _halfH;
-      _camera.bottom = -_halfH;
+      _camera.aspect = window.innerWidth / window.innerHeight;
       _camera.updateProjectionMatrix();
       _renderer.setSize(window.innerWidth, window.innerHeight);
     });
   }
 
-  // 함수 이름: _updateCamera
-  // 함수 기능: 구면 좌표(_theta, _phi, _radius) → 카메라 위치 갱신
-  // 입력 파라미터: 없음
-  // 리턴 타입: void
-  function _updateCamera() {
-    _camera.position.set(
-      _radius * Math.sin(_phi) * Math.sin(_theta),
-      _radius * Math.cos(_phi),
-      _radius * Math.sin(_phi) * Math.cos(_theta)
-    );
-    _camera.lookAt(0, 0, 0);
-    var aspect = window.innerWidth / window.innerHeight;
-    _camera.left   = -_halfH * aspect;
-    _camera.right  =  _halfH * aspect;
-    _camera.top    =  _halfH;
-    _camera.bottom = -_halfH;
-    _camera.updateProjectionMatrix();
-  }
-
   // ================================================================
-  // 카메라 조작
+  // 카메라 조작 (휠 줌 전용)
   // ================================================================
 
   // 함수 이름: _initControls
-  // 함수 기능: 마우스 드래그·휠·터치 이벤트 등록
+  // 함수 기능: 마우스 휠로 카메라 Z 위치 조절 (줌 인/아웃)
   // 입력 파라미터: 없음
   // 리턴 타입: void
   function _initControls() {
-    var el = _renderer.domElement;
-
-    el.addEventListener('mousedown',  function (e) {
-      _isDragging = true; _prevMX = e.clientX; _prevMY = e.clientY;
-    });
-    window.addEventListener('mouseup', function () { _isDragging = false; });
-    window.addEventListener('mousemove', function (e) {
-      if (!_isDragging) return;
-      _theta -= (e.clientX - _prevMX) * 0.007;
-      _phi    = Math.max(0.06, Math.min(Math.PI-0.06, _phi + (e.clientY - _prevMY) * 0.007));
-      _prevMX = e.clientX; _prevMY = e.clientY;
-      _updateCamera();
-    });
-    el.addEventListener('wheel', function (e) {
-      _halfH = Math.max(10, Math.min(80, _halfH + e.deltaY * 0.05));
-      _updateCamera();
+    _renderer.domElement.addEventListener('wheel', function (e) {
+      _camera.position.z = Math.max(28, Math.min(130, _camera.position.z + e.deltaY * 0.05));
     }, { passive: true });
-
-    el.addEventListener('touchstart', function (e) {
-      _isDragging = true;
-      _prevMX = e.touches[0].clientX; _prevMY = e.touches[0].clientY;
-    });
-    el.addEventListener('touchend',   function () { _isDragging = false; });
-    el.addEventListener('touchmove',  function (e) {
-      if (!_isDragging) return;
-      _theta -= (e.touches[0].clientX - _prevMX) * 0.007;
-      _phi    = Math.max(0.06, Math.min(Math.PI-0.06, _phi + (e.touches[0].clientY - _prevMY) * 0.007));
-      _prevMX = e.touches[0].clientX; _prevMY = e.touches[0].clientY;
-      _updateCamera();
-    });
   }
 
   // ================================================================
@@ -139,6 +81,8 @@
 
   // 함수 이름: _animate
   // 함수 기능: requestAnimationFrame 루프 — globalT 사이클 관리 → 전체 모듈 업데이트 → 렌더
+  //           t(연속 경과초)는 ArrowField 노이즈 wobble에 사용
+  //           globalT 사이클: Phase A(0→0.30) / Phase B(0.30→0.65) / Phase C(0.65→1.00) / Phase D 역행
   // 입력 파라미터: 없음
   // 리턴 타입: void
   function _animate() {
@@ -146,14 +90,9 @@
 
     var dt = _clock.getDelta();
     if (dt > 0.1) dt = 0.1;  // 백그라운드 복귀 시 dt 폭발 방지
+    var t  = _clock.getElapsedTime(); // getDelta 이후 호출해야 정확한 누적 시간 반환됨
 
-    // 드래그 중이 아닐 때 자동 공전
-    if (!_isDragging) {
-      _theta += PARAMS.camAutoRot * 60 * dt;
-      _updateCamera();
-    }
-
-    // globalT 사이클 관리 — Phase A/B/C (0→1, cycleDuration초), Phase D (1→0, resetDuration초 빠른 분산)
+    // globalT 사이클 관리 — Phase A/B/C (0→1), Phase D (1→0 빠른 분산)
     if (!_inReset) {
       _cycleT += dt / PARAMS.cycleDuration;
       if (_cycleT >= 1.0) { _cycleT = 1.0; _inReset = true; _resetT = 0; }
@@ -164,7 +103,7 @@
       _globalT = 1.0 - _resetT;
     }
 
-    ArrowField.update(_globalT);
+    ArrowField.update(_globalT, t);
     StreamLines.update(_globalT);
     ClusterMeshes.update(_globalT);
     BBoxLayer.update(_globalT);
@@ -176,7 +115,7 @@
   // ================================================================
 
   // 함수 이름: _start
-  // 함수 기능: 씬·컨트롤·ArrowField 초기화 후 애니메이션 시작
+  // 함수 기능: 씬·컨트롤·모든 레이어 초기화 후 애니메이션 시작
   // 입력 파라미터: 없음
   // 리턴 타입: void
   function _start() {
@@ -189,7 +128,6 @@
     _animate();
   }
 
-  // 폰트 로드 완료 후 시작 (지연 없이 실행되도록 폴백 포함)
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(_start);
   } else {

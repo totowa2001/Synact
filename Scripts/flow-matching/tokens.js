@@ -1,5 +1,5 @@
 // 최신화 260525
-// 최신화내용: Flow Matching 시각화 전면 재설계 — CLUSTERS, 사이클 파라미터, 직교 카메라
+// 최신화내용: 2.5D 전환 — PerspectiveCamera 파라미터, 3단계 페이즈 경계, 화살표 Z 깊이
 // 스크립트 이름: tokens.js
 // 스크립트 기능: 디자인 시스템 고정값 — 색상 토큰, 씬 파라미터, 클러스터 정의
 // 입력 파라미터: 없음 (전역 변수로 노출)
@@ -32,16 +32,15 @@ var COLORS = {
 };
 
 // ================================================================
-// Flow Matching 클러스터 — 데이터 분포 p₁ 의 수렴 모드 (3개)
-// 화살표들이 t=1에서 각자 최근접 클러스터 방향으로 정렬됨
+// Flow Matching 클러스터 — XY 평면 기준
 // ================================================================
 var CLUSTERS = [
-  { x:  10, y:   5, z:  -8, r: 3.0 },
-  { x: -11, y:  -4, z:   7, r: 2.5 },
-  { x:   3, y:  -9, z:   3, r: 2.8 },
+  { x:  10, y:   7, z: 0, r: 3.0 },
+  { x: -11, y:  -5, z: 0, r: 2.5 },
+  { x:   2, y: -10, z: 0, r: 2.8 },
 ];
 
-// ClusterMeshes 구 메시 색상 팔레트 (#0D0D3E 계열 다크 인디고)
+// ClusterMeshes 색상 팔레트 (#0D0D3E 계열 다크 인디고)
 var CLUSTER_COLORS_HEX = [
   0x0D0D3E,
   0x0A0A2E,
@@ -55,33 +54,36 @@ var CLUSTER_COLORS_HEX = [
 // 씬 파라미터
 // ================================================================
 var PARAMS = {
-  // --- 화살표 격자 (균등 분포) ---
-  gridN        : 12,    // 축당 화살표 수 (12³ = 1728개)
-  gridHalf     : 28,    // 격자 공간 반폭
+  // --- 화살표 격자 (2D 균등 격자, XY 평면) ---
+  gridN        : 22,    // 축당 화살표 수 (22² = 484개)
+  gridHalf     : 24,    // 격자 공간 반폭
 
-  // --- 화살표 크기 ---
-  pixelBaseSize: 1.5,   // 화살표 기본 스케일
+  // --- 화살표 박스 크기 (2.5D 입체감) ---
+  arrowW       : 1.15,  // 가로 (길이 방향)
+  arrowH       : 0.12,  // 세로 (두께)
+  arrowD       : 0.38,  // 깊이 (Z축 두께 — 2.5D 측면 입체감)
+
+  // --- 3단계 페이즈 경계 (globalT 기준) ---
+  phaseA       : 0.30,  // Phase A 종료 (정렬 → 분산 시작)
+  phaseB       : 0.65,  // Phase B 종료 (분산 → 클러스터 수렴 시작)
+  fixedAngle   : -0.72, // Phase A 고정 방향각 (rad, ≈ -41°)
 
   // --- Flow Matching 시간 사이클 ---
-  cycleDuration: 9.0,   // Phase A→C 한 사이클 길이 (초)
-  resetDuration: 1.8,   // Phase D 빠른 분산 길이 (초)
+  cycleDuration: 8.0,   // Phase A→C 한 사이클 (초)
+  resetDuration: 1.5,   // Phase D 빠른 분산 (초)
 
-  // --- 스트림라인 (직선) ---
-  streamCount  : 60,    // 직선 스트림라인 수
-  streamLen    : 32,    // 꼬리 점 수
-  streamTailDt : 0.28,  // 꼬리가 덮는 globalT 구간
+  // --- 스트림라인 ---
+  streamCount  : 80,
+  streamLen    : 26,
+  streamTailDt : 0.20,
 
-  // --- 클러스터 입자 (ClusterMeshes) ---
-  particleCount: 180,   // 구 메시 입자 수
+  // --- 클러스터 입자 ---
+  particleCount: 180,
 
-  // --- BFS 바운딩박스 ---
-  bboxCount    : 6,
+  // --- 바운딩박스 ---
+  bboxCount    : 14,
 
-  // --- 씬 ---
-  fogDensity   : 0.003,
-
-  // --- 카메라 (OrthographicCamera, 구 외부 시점) ---
-  camRadius    : 80,
-  camHalfH     : 35,
-  camAutoRot   : 0.00010,
+  // --- 카메라 (PerspectiveCamera, 2.5D 시점) ---
+  camFOV       : 48,    // 시야각 (좁을수록 원근 왜곡 감소)
+  camZ         : 65,    // 카메라 Z 위치
 };
