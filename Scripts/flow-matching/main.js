@@ -182,6 +182,12 @@
       _onPhaseEnter(_phase);
     }
 
+    // 드래그 중이 아닐 때 자동 공전
+    if (!_isDragging) {
+      _theta += PARAMS.camAutoRot * 60 * dt;
+      _updateCamera();
+    }
+
     ArrowField.update(_phase, _phaseT, t);
     ParticleSystem.update(_phase, _phaseT, t);
     _renderer.render(_scene, _camera);
