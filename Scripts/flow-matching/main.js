@@ -134,7 +134,7 @@
     window.addEventListener('mousemove', function (e) {
       if (!_isDragging) return;
       _theta -= (e.clientX - _prevMX) * 0.007;
-      _phi    = Math.max(0.06, Math.min(Math.PI - 0.06, _phi + (e.clientY - _prevMY) * 0.007));
+      _phi    = Math.max(0.06, Math.min(Math.PI - 0.06, _phi - (e.clientY - _prevMY) * 0.007));
       _prevMX = e.clientX; _prevMY = e.clientY;
       _updateCamera();
     });
@@ -151,7 +151,7 @@
     el.addEventListener('touchmove', function (e) {
       if (!_isDragging) return;
       _theta -= (e.touches[0].clientX - _prevMX) * 0.007;
-      _phi    = Math.max(0.06, Math.min(Math.PI - 0.06, _phi + (e.touches[0].clientY - _prevMY) * 0.007));
+      _phi    = Math.max(0.06, Math.min(Math.PI - 0.06, _phi - (e.touches[0].clientY - _prevMY) * 0.007));
       _prevMX = e.touches[0].clientX; _prevMY = e.touches[0].clientY;
       _updateCamera();
     });

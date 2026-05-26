@@ -31,10 +31,10 @@ var PARAMS = {
   gridN    : 10,    // 축당 박스 수 (10³ = 1000개)
   gridHalf : 22,    // 격자 공간 반폭
 
-  // 직육면체 (방향 표현, Y축 = 길이 방향)
+  // 직육면체 (방향 표현, Y축 = 길이 방향, W=D 정사각 단면)
   arrowW   : 0.20,
   arrowH   : 1.10,
-  arrowD   : 0.10,
+  arrowD   : 0.20,
 
   // 구형 입자
   particleCount: 500,
@@ -48,8 +48,8 @@ var PARAMS = {
   fogDensity : 0.014,
 
   // 페이즈 지속 시간 (초)
-  scatterDur : 2.5,
-  convergeDur: 5.5,
-  peakDur    : 2.0,
-  releaseDur : 2.2,
+  scatterDur : 1.3,
+  convergeDur: 2.8,
+  peakDur    : 1.0,
+  releaseDur : 1.1,
 };

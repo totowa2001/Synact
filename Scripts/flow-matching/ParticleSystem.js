@@ -1,16 +1,16 @@
 // 최신화 260526
-// 최신화내용: 신규 — 3D 가우시안 분포 입자, 직선 이동, vertex color 꼬리 시스템,
-//            scatter/converge/peak/release 4단계 위치 보간
+// 최신화내용: 개선 — 고폴리 구형(16,12), InstancedMesh 꼬리(구 형태·두께 일치),
+//            scatter/peak 진동 amplitude ramp-up(연속성 보장), converge ease-out 보간
 // 스크립트 이름: ParticleSystem.js
-// 스크립트 기능: 500개 구형 입자(#171839)와 꼬리 선으로 Flow Matching 노이즈→형상 수렴 시각화.
-//   scatter  : 가우시안 초기 위치에서 느린 진동
-//   converge : 현재 위치 → 형상 타깃 직선 이동 (꼬리 활성)
-//   peak     : 형상 위치 도달, 꼬리 페이드아웃
-//   release  : 형상 위치 → 가우시안 산란 위치 직선 이동 (꼬리 활성, 점차 페이드)
+// 스크립트 기능: 500개 구형 입자(#171839)와 구형 꼬리 InstancedMesh로 Flow Matching 시각화.
+//   scatter  : 가우시안 초기 위치에서 느린 진동 (진입 시 amplitude 점진 ramp-up)
+//   converge : 현재 위치 → 형상 타깃 ease-out 보간 (처음 빠름 → 점점 느림, 꼬리 활성)
+//   peak     : 형상 위치 미세 진동, amplitude ramp-up (꼬리 페이드아웃)
+//   release  : 형상 위치 → 가우시안 산란 위치 smoothstep 보간 (꼬리 활성 후 페이드)
 //
 // [ 핵심 구조 ]
-//   _mesh      — SphereGeometry(0.28) InstancedMesh (500개)
-//   _trails    — THREE.Line 배열 (500개, vertexColors)
+//   _mesh      — SphereGeometry(0.28, 16, 12) InstancedMesh (500개)
+//   _trailMesh — SphereGeometry(0.28, 4, 3) InstancedMesh (500×24개, MeshBasicMaterial)
 //   _trailBuf  — Float32Array (TOTAL × TRAIL_LEN × 3) XYZ 링 버퍼
 //   _trailHead — Uint8Array (TOTAL) 쓰기 커서
 //   _pos       — Float32Array (TOTAL×3) 현재 위치
@@ -21,17 +21,16 @@
 
 var ParticleSystem = (function () {
 
-  var _scene, _mesh, _TOTAL, _TRAIL_LEN;
-  var _dummy;
-  var _pos;          // Float32Array (TOTAL*3) 현재 위치
-  var _p0;           // Float32Array (TOTAL*3) 페이즈 시작 위치
-  var _p1;           // Float32Array (TOTAL*3) 페이즈 목표 위치
-  var _shapePts;     // Float32Array (TOTAL*3) 현재 수렴 형상 목표점
-  var _scatterFreq;  // Float32Array (TOTAL) 산란 진동 주파수
-  var _scatterPhase; // Float32Array (TOTAL*3) 산란 진동 위상 (XYZ)
-  var _trailBuf;     // Float32Array (TOTAL * TRAIL_LEN * 3)
-  var _trailHead;    // Uint8Array (TOTAL) 링 버퍼 쓰기 커서
-  var _trails;       // THREE.Line 배열
+  var _scene, _mesh, _trailMesh, _TOTAL, _TRAIL_LEN;
+  var _dummy, _trailColor;
+  var _pos;           // Float32Array (TOTAL*3) 현재 위치
+  var _p0;            // Float32Array (TOTAL*3) 페이즈 시작 위치
+  var _p1;            // Float32Array (TOTAL*3) 페이즈 목표 위치
+  var _shapePts;      // Float32Array (TOTAL*3) 현재 수렴 형상 목표점
+  var _scatterFreq;   // Float32Array (TOTAL) 산란 진동 주파수
+  var _scatterPhase;  // Float32Array (TOTAL*3) 산란 진동 위상 (XYZ)
+  var _trailBuf;      // Float32Array (TOTAL * TRAIL_LEN * 3)
+  var _trailHead;     // Uint8Array (TOTAL) 링 버퍼 쓰기 커서
   var _releaseCount = 0;
 
   // 함수 이름: _rnd
@@ -62,9 +61,19 @@ var ParticleSystem = (function () {
     return t * t * (3 - 2 * t);
   }
 
+  // 함수 이름: _easeOut
+  // 함수 기능: ease-out 이징 t(2-t) — 처음 빠르게, 끝에서 느리게 수렴
+  // 입력 파라미터: t (Number) [0,1]
+  // 리턴 타입: Number [0,1]
+  function _easeOut(t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return t * (2 - t);
+  }
+
   // 함수 이름: init
   // 함수 기능: 가우시안 초기 위치·진동 파라미터·꼬리 버퍼 초기화,
-  //           SphereGeometry InstancedMesh + Line 꼬리 배열 생성
+  //           SphereGeometry InstancedMesh (입자 + 꼬리) 생성
   // 입력 파라미터: scene (THREE.Scene)
   // 리턴 타입: void
   function init(scene) {
@@ -93,33 +102,30 @@ var ParticleSystem = (function () {
       _p1[i*3+1]  = _pos[i*3+1];
       _p1[i*3+2]  = _pos[i*3+2];
 
-      _scatterFreq[i]    = 0.18 + _rnd(i*11)    * 0.25;
+      _scatterFreq[i]      = 0.18 + _rnd(i*11)    * 0.25;
       _scatterPhase[i*3]   = _rnd(i*13+0) * Math.PI * 2;
       _scatterPhase[i*3+1] = _rnd(i*13+1) * Math.PI * 2;
       _scatterPhase[i*3+2] = _rnd(i*13+2) * Math.PI * 2;
     }
 
-    // 구형 입자 InstancedMesh (#171839 고정색)
-    var geo = new THREE.SphereGeometry(0.28, 6, 4);
+    // 고폴리 구형 입자 InstancedMesh (#171839, Lambert 조명)
+    var geo = new THREE.SphereGeometry(0.28, 16, 12);
     var mat = new THREE.MeshLambertMaterial({ color: COLORS.particle });
     _mesh = new THREE.InstancedMesh(geo, mat, _TOTAL);
     _mesh.frustumCulled = false;
     _scene.add(_mesh);
 
-    _dummy = new THREE.Object3D();
+    // 꼬리 InstancedMesh — 저폴리 구형, MeshBasicMaterial(조명 없음, 배경색 페이드 정밀)
+    // 인스턴스 색상(setColorAt)이 material.color(white)와 곱셈되므로 원하는 색 직접 입력
+    var tGeo = new THREE.SphereGeometry(0.28, 4, 3);
+    var tMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    _trailMesh = new THREE.InstancedMesh(tGeo, tMat, _TOTAL * _TRAIL_LEN);
+    _trailMesh.frustumCulled = false;
+    _trailMesh.visible = false;
+    _scene.add(_trailMesh);
 
-    // 꼬리 Line 배열 (vertexColors: true)
-    _trails = [];
-    for (var i = 0; i < _TOTAL; i++) {
-      var tGeo = new THREE.BufferGeometry();
-      tGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(_TRAIL_LEN * 3), 3));
-      tGeo.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(_TRAIL_LEN * 3), 3));
-      var tMat = new THREE.LineBasicMaterial({ vertexColors: true });
-      var line = new THREE.Line(tGeo, tMat);
-      line.frustumCulled = false;
-      _scene.add(line);
-      _trails.push(line);
-    }
+    _dummy      = new THREE.Object3D();
+    _trailColor = new THREE.Color();
   }
 
   // 함수 이름: assignTargets
@@ -173,7 +179,6 @@ var ParticleSystem = (function () {
       _p0[i*3]   = _pos[i*3];
       _p0[i*3+1] = _pos[i*3+1];
       _p0[i*3+2] = _pos[i*3+2];
-      // 매 cycle마다 다른 seed로 새 산란 위치 생성
       var s = i * 31 + _releaseCount * 1000;
       _p1[i*3]   = _gauss(s + 1) * sigma;
       _p1[i*3+1] = _gauss(s + 3) * sigma;
@@ -194,46 +199,63 @@ var ParticleSystem = (function () {
     _trailHead[i] = (_trailHead[i] + 1) % _TRAIL_LEN;
   }
 
-  // 함수 이름: _updateTrailLine
-  // 함수 기능: 입자 i의 꼬리 Line 위치·색상 갱신.
-  //           k=0(가장 오래된 점, 배경색) → k=TRAIL_LEN-1(최신, 입자색) vertex color 페이드.
-  //           trailFade=0이면 모든 점 배경색 (시각적으로 투명)
-  // 입력 파라미터: i (Number), trailFade (Number) [0,1] 꼬리 밝기 계수
+  // 함수 이름: _updateTrailInstances
+  // 함수 기능: 꼬리 InstancedMesh 전체 위치·색상 갱신.
+  //           k=0(가장 오래된 점, 배경색) → k=TRAIL_LEN-1(최신, 입자색) 선형 페이드.
+  //           trailFade≤0이면 _trailMesh 숨김으로 렌더 스킵
+  // 입력 파라미터: trailFade (Number) [0,1] 꼬리 전체 밝기 계수
   // 리턴 타입: void
-  function _updateTrailLine(i, trailFade) {
-    var line   = _trails[i];
-    var posArr = line.geometry.attributes.position.array;
-    var colArr = line.geometry.attributes.color.array;
-    var bgR = BG_R/255, bgG = BG_G/255, bgB = BG_B/255;
-    // #171839 = r:23, g:24, b:57
-    var pR = 23/255, pG = 24/255, pB = 57/255;
-    var base = i * _TRAIL_LEN * 3;
+  function _updateTrailInstances(trailFade) {
+    if (trailFade <= 0.001) {
+      _trailMesh.visible = false;
+      return;
+    }
+    _trailMesh.visible = true;
 
-    for (var k = 0; k < _TRAIL_LEN; k++) {
-      var bufIdx = (_trailHead[i] + k) % _TRAIL_LEN;  // k=0: 가장 오래된 점
-      var alpha  = (k / (_TRAIL_LEN - 1)) * trailFade;
-      posArr[k*3]   = _trailBuf[base + bufIdx*3];
-      posArr[k*3+1] = _trailBuf[base + bufIdx*3+1];
-      posArr[k*3+2] = _trailBuf[base + bufIdx*3+2];
-      colArr[k*3]   = bgR + (pR - bgR) * alpha;
-      colArr[k*3+1] = bgG + (pG - bgG) * alpha;
-      colArr[k*3+2] = bgB + (pB - bgB) * alpha;
+    var bgR = BG_R / 255, bgG = BG_G / 255, bgB = BG_B / 255;
+    // #171839 → r:23, g:24, b:57
+    var pR = 23 / 255, pG = 24 / 255, pB = 57 / 255;
+
+    for (var i = 0; i < _TOTAL; i++) {
+      var base = i * _TRAIL_LEN * 3;
+      for (var k = 0; k < _TRAIL_LEN; k++) {
+        // k=0 가장 오래된 점(배경색), k=TRAIL_LEN-1 최신 점(입자색)
+        var bufIdx  = (_trailHead[i] + k) % _TRAIL_LEN;
+        var alpha   = (k / (_TRAIL_LEN - 1)) * trailFade;
+        var instIdx = i * _TRAIL_LEN + k;
+
+        _dummy.position.set(
+          _trailBuf[base + bufIdx*3],
+          _trailBuf[base + bufIdx*3+1],
+          _trailBuf[base + bufIdx*3+2]
+        );
+        _dummy.scale.setScalar(1);
+        _dummy.updateMatrix();
+        _trailMesh.setMatrixAt(instIdx, _dummy.matrix);
+
+        _trailColor.setRGB(
+          bgR + (pR - bgR) * alpha,
+          bgG + (pG - bgG) * alpha,
+          bgB + (pB - bgB) * alpha
+        );
+        _trailMesh.setColorAt(instIdx, _trailColor);
+      }
     }
 
-    line.geometry.attributes.position.needsUpdate = true;
-    line.geometry.attributes.color.needsUpdate    = true;
+    _trailMesh.instanceMatrix.needsUpdate = true;
+    if (_trailMesh.instanceColor) _trailMesh.instanceColor.needsUpdate = true;
   }
 
   // 함수 이름: update
   // 함수 기능: phase/phaseT에 따라 입자 XYZ 위치 보간, 꼬리 갱신, InstancedMesh 갱신
-  //   scatter  : _p1 기준 느린 진동 (산란 상태)
-  //   converge : _p0 → _p1 직선 smoothstep 보간 (꼬리 활성)
-  //   peak     : 형상 위치 미세 진동 (꼬리 페이드아웃)
-  //   release  : _p0 → _p1 직선 보간 (꼬리 활성 후 점차 페이드)
+  //   scatter  : _p1 기준 느린 진동, 진입 시 amp ramp-up 0→0.75 (연속성 보장)
+  //   converge : _p0 → _p1 ease-out 보간 (처음 빠르게 → 끝에서 천천히, 꼬리 활성)
+  //   peak     : 형상 위치 미세 진동, amp ramp-up 0→0.18 (꼬리 페이드아웃)
+  //   release  : _p0 → _p1 smoothstep 보간 (꼬리 활성, 점차 페이드)
   // 입력 파라미터: phase (string), phaseT (Number) [0,1], t (Number) 연속 경과초
   // 리턴 타입: void
   function update(phase, phaseT, t) {
-    // 꼬리 페이드 계수 결정
+    // 꼬리 밝기 계수 결정
     var trailFade;
     if (phase === 'converge') {
       trailFade = 1.0;
@@ -248,25 +270,32 @@ var ParticleSystem = (function () {
     var doWriteTrail = (phase === 'converge' || phase === 'release');
 
     for (var i = 0; i < _TOTAL; i++) {
-      var px, py, pz, st, f;
+      var px, py, pz, st, f, amp;
 
       if (phase === 'scatter') {
-        f  = _scatterFreq[i];
-        px = _p1[i*3]   + Math.sin(t * f + _scatterPhase[i*3])   * 0.75;
-        py = _p1[i*3+1] + Math.sin(t * f + _scatterPhase[i*3+1]) * 0.75;
-        pz = _p1[i*3+2] + Math.sin(t * f + _scatterPhase[i*3+2]) * 0.75;
+        // 진입 직후 0%→30% 구간에서 amplitude를 0에서 0.75로 점진 ramp-up
+        // → 이전 phase(release) 종료 위치에서 끊김 없이 자연스럽게 연결
+        amp = Math.min(1, phaseT / 0.30) * 0.75;
+        f   = _scatterFreq[i];
+        px  = _p1[i*3]   + Math.sin(t * f + _scatterPhase[i*3])   * amp;
+        py  = _p1[i*3+1] + Math.sin(t * f + _scatterPhase[i*3+1]) * amp;
+        pz  = _p1[i*3+2] + Math.sin(t * f + _scatterPhase[i*3+2]) * amp;
 
       } else if (phase === 'converge') {
-        st = _smoothstep(phaseT);
+        // ease-out: 처음 빠르게, 끝에서 천천히 수렴
+        st = _easeOut(phaseT);
         px = _p0[i*3]   + st * (_p1[i*3]   - _p0[i*3]);
         py = _p0[i*3+1] + st * (_p1[i*3+1] - _p0[i*3+1]);
         pz = _p0[i*3+2] + st * (_p1[i*3+2] - _p0[i*3+2]);
 
       } else if (phase === 'peak') {
-        f  = _scatterFreq[i] * 2;
-        px = _shapePts[i*3]   + Math.sin(t * f + _scatterPhase[i*3])   * 0.18;
-        py = _shapePts[i*3+1] + Math.sin(t * f + _scatterPhase[i*3+1]) * 0.18;
-        pz = _shapePts[i*3+2] + Math.sin(t * f + _scatterPhase[i*3+2]) * 0.18;
+        // 진입 직후 0%→20% 구간에서 amplitude 0→0.18 ramp-up
+        // → converge 종료 시 정확히 _shapePts에 있으므로 끊김 없음
+        amp = Math.min(1, phaseT / 0.20) * 0.18;
+        f   = _scatterFreq[i] * 2;
+        px  = _shapePts[i*3]   + Math.sin(t * f + _scatterPhase[i*3])   * amp;
+        py  = _shapePts[i*3+1] + Math.sin(t * f + _scatterPhase[i*3+1]) * amp;
+        pz  = _shapePts[i*3+2] + Math.sin(t * f + _scatterPhase[i*3+2]) * amp;
 
       } else {  // release
         st = _smoothstep(phaseT);
@@ -278,7 +307,6 @@ var ParticleSystem = (function () {
       _pos[i*3] = px; _pos[i*3+1] = py; _pos[i*3+2] = pz;
 
       if (doWriteTrail) _writeTrail(i, px, py, pz);
-      if (trailFade > 0.001) _updateTrailLine(i, trailFade);
 
       _dummy.position.set(px, py, pz);
       _dummy.scale.setScalar(1);
@@ -286,6 +314,7 @@ var ParticleSystem = (function () {
       _mesh.setMatrixAt(i, _dummy.matrix);
     }
 
+    _updateTrailInstances(trailFade);
     _mesh.instanceMatrix.needsUpdate = true;
   }
 
