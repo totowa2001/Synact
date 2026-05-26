@@ -117,7 +117,7 @@ var ParticleSystem = (function () {
 
     // 꼬리 InstancedMesh — 저폴리 구형, MeshBasicMaterial(조명 없음, 배경색 페이드 정밀)
     // 인스턴스 색상(setColorAt)이 material.color(white)와 곱셈되므로 원하는 색 직접 입력
-    var tGeo = new THREE.SphereGeometry(0.28, 4, 3);
+    var tGeo = new THREE.SphereGeometry(0.07, 4, 3);
     var tMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     _trailMesh = new THREE.InstancedMesh(tGeo, tMat, _TOTAL * _TRAIL_LEN);
     _trailMesh.frustumCulled = false;
