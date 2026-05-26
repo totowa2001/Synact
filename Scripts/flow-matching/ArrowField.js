@@ -1,6 +1,5 @@
 // 최신화 260526
-// 최신화내용: 전면 재설계 — 3D 균등 격자(10³), 결정론적 랜덤 방향, 수렴 방향 전환,
-//            #515F75 → #D32677 색상 전환, 직육면체 Y축 방향 정렬
+// 최신화내용: 개선 — converge 방향·색상 전환을 노이즈 80% 수렴 완료 시점(phaseT≈0.55)까지 지연
 // 스크립트 이름: ArrowField.js
 // 스크립트 기능: 3D 공간에 10³=1000개 직육면체를 균등 배치하여 벡터장 시각화.
 //   scatter   : 결정론적 랜덤 방향 + 느린 wobble
@@ -134,10 +133,20 @@ var ArrowField = (function () {
   // 입력 파라미터: phase (string), phaseT (Number) [0,1], t (Number) 연속 경과초
   // 리턴 타입: void
   function update(phase, phaseT, t) {
+
+    // converge: 노이즈가 ~80% 수렴 완료되는 phaseT≈0.55 이후에 방향·색상 전환 시작
+    // (입자는 ease-out으로 진행하므로 phaseT=0.55일 때 easeOut(0.55)≈0.80 수렴)
+    var CONV_DELAY = 0.55;
+    var convProg = 0;
+    if (phase === 'converge') {
+      var d = Math.max(0, (phaseT - CONV_DELAY) / (1.0 - CONV_DELAY));
+      convProg = _smoothstep(d);
+    }
+
     // heat 계수: 0=#515F75, 1=#D32677
     var heat;
-    if      (phase === 'peak')    heat = 1.0;
-    else if (phase === 'converge') heat = _smoothstep(phaseT);
+    if      (phase === 'peak')     heat = 1.0;
+    else if (phase === 'converge') heat = convProg;
     else if (phase === 'release')  heat = 1.0 - _smoothstep(phaseT);
     else                           heat = 0;
 
@@ -159,7 +168,7 @@ var ArrowField = (function () {
         dx /= len; dy /= len; dz /= len;
 
       } else if (phase === 'converge') {
-        prog = _smoothstep(phaseT);
+        prog = convProg;  // 루프 외부 사전 계산값 (지연 적용)
         dx = _rndDir[i*3]   * (1 - prog) + _convDir[i*3]   * prog;
         dy = _rndDir[i*3+1] * (1 - prog) + _convDir[i*3+1] * prog;
         dz = _rndDir[i*3+2] * (1 - prog) + _convDir[i*3+2] * prog;
