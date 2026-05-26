@@ -109,7 +109,7 @@ var ParticleSystem = (function () {
     }
 
     // 고폴리 구형 입자 InstancedMesh (#171839, Lambert 조명)
-    var geo = new THREE.SphereGeometry(0.28, 16, 12);
+    var geo = new THREE.SphereGeometry(0.2, 12, 12); // 입자 크기, 폴리곤 수, 폴리곤 수
     var mat = new THREE.MeshLambertMaterial({ color: COLORS.particle });
     _mesh = new THREE.InstancedMesh(geo, mat, _TOTAL);
     _mesh.frustumCulled = false;
@@ -117,8 +117,8 @@ var ParticleSystem = (function () {
 
     // 꼬리 InstancedMesh — 저폴리 구형, MeshBasicMaterial(조명 없음, 배경색 페이드 정밀)
     // 인스턴스 색상(setColorAt)이 material.color(white)와 곱셈되므로 원하는 색 직접 입력
-        var tGeo = new THREE.SphereGeometry(0.07, 4, 3);
-    var tMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        var tGeo = new THREE.SphereGeometry(0.07, 20, 3);  // 잔상 두께, ??, ??
+    var tMat = new THREE.MeshBasicMaterial({ color: 0xB2BCCE }); // 잔상 색상
     _trailMesh = new THREE.InstancedMesh(tGeo, tMat, _TOTAL * _TRAIL_LEN);
     _trailMesh.frustumCulled = false;
     _trailMesh.visible = false;

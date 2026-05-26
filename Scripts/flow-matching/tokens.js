@@ -13,10 +13,13 @@ var BG_B = 248;
 // ================================================================
 // 색상 토큰
 // ================================================================
+
+// 직육면체 Arrow들의 경우 ArrowField.js의 Line153에서 교체할 것.
+
 var COLORS = {
-  particle: 0x171839,  // 구형 입자
-  vector  : 0x515F75,  // 벡터장 직육면체 (기본)
-  peak    : 0xD32677,  // 수렴 완료 핫스팟
+  particle: 0x0F0F28,  // 구형 입자
+  vector  : 0x0F0F28,  // 벡터장 직육면체 (기본)
+  peak    : 0x0C0C3F,  // 수렴 완료 핫스팟
   bgColor : function () {
     return new THREE.Color(BG_R / 255, BG_G / 255, BG_B / 255);
   }
@@ -27,17 +30,17 @@ var COLORS = {
 // ================================================================
 var PARAMS = {
   // 3D 균등 격자 벡터장 (gridN³ 개 직육면체)
-  gridN    : 14,    // 축당 박스 수 (14³ = 2744개, 공간 3배 확장)
+  gridN    : 15,    // 축당 박스 수 (15³개, 공간 3배 확장)
   gridHalf : 32,    // 격자 공간 반폭 (부피 약 3배)
 
   // 직육면체 (방향 표현, Y축 = 길이 방향, W=D 정사각 단면)
-  arrowW   : 0.20,
-  arrowH   : 1.65,
-  arrowD   : 0.20,
+  arrowW   : 0.24,
+  arrowH   : 2.0,
+  arrowD   : 0.24,
 
   // 구형 입자
-  particleCount: 500,
-  particleSigma: 13,
+  particleCount: 1600,
+  particleSigma: 12,
   trailLen     : 24,
 
   // 카메라 (구면 좌표 궤도)
@@ -46,8 +49,8 @@ var PARAMS = {
   fogDensity : 0.014,
 
   // 페이즈 지속 시간 (초)
-  scatterDur : 1.3,
-  convergeDur: 2.8,
-  peakDur    : 1.0,
-  releaseDur : 2.2,
+  scatterDur : 1.5,
+  convergeDur: 2.0,
+  peakDur    : 1.2,
+  releaseDur : 2.0,
 };

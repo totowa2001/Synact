@@ -127,7 +127,7 @@ var ArrowField = (function () {
   // 함수 기능: phase/phaseT에 따라 각 직육면체 방향·색상 갱신.
   //   scatter  : rndDir + 느린 wobble
   //   converge : rndDir → convDir 보간
-  //   peak     : convDir 고정, #D32677
+  //   peak     : convDir 고정, #23236B
   //   release  : convDir 유지 후 지연 시작하여 rndDir 복귀, 색상 냉각
   //   직육면체 Y축을 방향 벡터에 정렬 (setFromUnitVectors)
   // 입력 파라미터: phase (string), phaseT (Number) [0,1], t (Number) 연속 경과초
@@ -150,9 +150,9 @@ var ArrowField = (function () {
     else if (phase === 'release')  heat = 1.0 - _smoothstep(phaseT);
     else                           heat = 0;
 
-    // 색상 성분 (#515F75 ↔ #D32677)
-    var vR = 81/255, vG = 95/255, vB = 117/255;
-    var pR = 211/255, pG = 38/255, pB = 119/255;
+    // 색상 성분 (#BBBBD5 ↔ #181858)
+    var vR = 187/255, vG = 187/255, vB = 213/255;
+    var pR = 24/255, pG = 24/255, pB = 88/255;
 
     for (var i = 0; i < _TOTAL; i++) {
       var gx = _gridPos[i*3], gy = _gridPos[i*3+1], gz = _gridPos[i*3+2];
